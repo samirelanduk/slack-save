@@ -1,7 +1,8 @@
 import argparse
 import os
 import json
-import requests
+import urllib.request
+import urllib.parse
 import time
 import random
 from datetime import datetime
@@ -11,7 +12,7 @@ sleep_time = 20
 def main():
     data, output_path = parse_args()
     output = {"people": {}, "conversations": {}}
-    #output["people"] = get_users(data)
+    output["people"] = get_users(data)
     save_output(output, output_path)
     for channel_id, channel_name in data["channels"].items():
         process_conversation(channel_id, channel_name, data, output, output_path)
@@ -121,23 +122,31 @@ def save_conversation_to_text(messages, name, output_path):
 def slack_request(method, url, data, params=None, indent=1):
     global sleep_time
     url = url if url.startswith("https://") else f"https://{data['workspace']}.slack.com/api/{url}"
+    headers = {"cookie": data["cookie"]}
     while True:
-        response = requests.request(
-            method,
+        if method == "POST":
+            body = urllib.parse.urlencode({"token": data["token"]}).encode()
+        else:
+            body = None
+        if params:
+            url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
+        req = urllib.request.Request(
             url,
-            headers={"cookie": data["cookie"]},
-            data={"token": data["token"]} if method == "POST" else None,
-            params=params,
+            data=body,
+            headers=headers,
+            method=method,
         )
-        response.raise_for_status()
+        with urllib.request.urlopen(req) as response:
+            content = response.read()
         time.sleep(random.uniform(0.25, 0.75))
-        if method == "GET": return response.content
-        if response.json().get("error") == "ratelimited":
+        if method == "GET": return content
+        result = json.loads(content)
+        if result.get("error") == "ratelimited":
             log(f"Ratelimited, sleeping for {sleep_time} seconds", indent=indent)
             time.sleep(sleep_time)
             sleep_time += 7
             continue
-        return response.json()
+        return result
 
 
 def slack_post(*args, **kwargs):
