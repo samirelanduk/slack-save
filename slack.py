@@ -4,25 +4,17 @@ import json
 import requests
 import time
 import random
+from datetime import datetime
 
 sleep_time = 20
 
 def main():
-    # Parse arguments
     data, output_path = parse_args()
-
-    # Save a list of all the users in the workspace
     output = {"people": {}, "conversations": {}}
     output["people"] = get_users(data)
     save_output(output, output_path)
-
     for channel_id, channel_name in data["channels"].items():
-        log(channel_name)
-        output["conversations"][channel_id] = {
-            "name": channel_name,
-            "messages": get_all_messages(channel_id, data)
-        }
-        save_output(output, output_path)
+        process_conversation(channel_id, channel_name, data, output, output_path)
 
 
 def parse_args():
@@ -36,6 +28,7 @@ def parse_args():
 
 
 def get_users(data):
+    log("Downloading users")
     users = {}
     for channel_id in data["channels"] | data["conversations"]:
         params = {"channel": channel_id}
@@ -43,6 +36,17 @@ def get_users(data):
         for user in response["users"]:
             users[user["id"]] = user
     return users
+
+
+def process_conversation(channel_id, channel_name, data, output, output_path):
+    log(channel_name)
+    messages = get_all_messages(channel_id, data)
+    output["conversations"][channel_id] = {
+        "name": channel_name,
+        "messages": messages
+    }
+    save_output(output, output_path)
+    save_conversation_to_text(messages, channel_name, output_path)
 
 
 def get_all_messages(channel_id, data, reply_ts=None):
@@ -84,6 +88,20 @@ def check_replies(message, channel_id, data):
         message["replies"] = get_all_messages(channel_id, reply_ts=message["ts"], data=data)
     else:
         message["replies"] = []
+
+
+def save_conversation_to_text(messages, name, output_path):
+    lines = []
+    for message in messages:
+        dt = datetime.fromtimestamp(float(message["ts"]))
+        dt_string = dt.strftime("%Y-%m-%d %H:%M:%S")
+        lines.append(f"{dt_string}: {message['text']}\n")
+        for reply in message.get("replies", []):
+            lines.append(f"    {reply['text']}")
+        lines.append("")
+    filename = name.replace(" ", "_").replace(",", "_")
+    with open(f"{output_path}/{filename}.txt", "w") as f:
+        f.write("\n".join(lines))
     
 
 def slack_request(method, url, data, params=None, indent=1):
