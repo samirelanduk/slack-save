@@ -159,7 +159,7 @@ def check_files(message, data, output_path):
             log(f"Downloaded file {filename}", indent=2)
 
 
-def save_conversation_to_text(messages, name, users,output_path):
+def save_conversation_to_text(messages, name, users, output_path):
     """Saves a conversation to a text file. It will format the messages in a
     human-readable way, and save the file to the output path."""
 
@@ -184,14 +184,14 @@ def slack_request(method, url, data, params=None, indent=1):
 
     global sleep_time
     url = url if url.startswith("https://") else f"https://{data['workspace']}.slack.com/api/{url}"
+    if params:
+        url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
     headers = {"cookie": data["cookie"]}
     while True:
         if method == "POST":
             body = urllib.parse.urlencode({"token": data["token"]}).encode()
         else:
             body = None
-        if params:
-            url += ("&" if "?" in url else "?") + urllib.parse.urlencode(params)
         req = urllib.request.Request(
             url,
             data=body,
