@@ -11,7 +11,7 @@ sleep_time = 20
 def main():
     data, output_path = parse_args()
     output = {"people": {}, "conversations": {}}
-    output["people"] = get_users(data)
+    #output["people"] = get_users(data)
     save_output(output, output_path)
     for channel_id, channel_name in data["channels"].items():
         process_conversation(channel_id, channel_name, data, output, output_path)
@@ -40,7 +40,7 @@ def get_users(data):
 
 def process_conversation(channel_id, channel_name, data, output, output_path):
     log(channel_name)
-    messages = get_all_messages(channel_id, data)
+    messages = get_all_messages(channel_id, data, output_path)
     output["conversations"][channel_id] = {
         "name": channel_name,
         "messages": messages
@@ -49,7 +49,7 @@ def process_conversation(channel_id, channel_name, data, output, output_path):
     save_conversation_to_text(messages, channel_name, output_path)
 
 
-def get_all_messages(channel_id, data, reply_ts=None):
+def get_all_messages(channel_id, data, output_path, reply_ts=None):
     page = 1
     last_message_ts = None
     messages = []
@@ -65,7 +65,8 @@ def get_all_messages(channel_id, data, reply_ts=None):
             log(f"Page {page}", indent=1)
         new_messages = [message for message in new_messages if message.get("ts") != last_message_ts]
         for message in new_messages:
-            check_replies(message, channel_id, data)
+            check_replies(message, channel_id, data, output_path)
+            check_files(message, data, output_path)
         messages += new_messages
         messages.sort(key=lambda x: x["ts"])
         page += 1
@@ -83,11 +84,24 @@ def get_messages_page(channel_id, data, latest_ts=None, reply_ts=None):
     return messages
 
 
-def check_replies(message, channel_id, data):
+def check_replies(message, channel_id, data, output_path):
     if message.get("reply_count", 0) > 0:
-        message["replies"] = get_all_messages(channel_id, reply_ts=message["ts"], data=data)
+        message["replies"] = get_all_messages(channel_id, data, output_path, reply_ts=message["ts"])
     else:
         message["replies"] = []
+
+
+def check_files(message, data, output_path):
+    for file in message.get("files", []):
+        if not file.get("url_private_download"): continue
+        filename = f"{output_path}/slack_files/{file['id']}.{file['filetype']}"
+        if not os.path.exists(filename):
+            os.makedirs(f"{output_path}/slack_files", exist_ok=True)
+            log(f"Downloading file {filename}...", indent=2)
+            response = slack_get(file["url_private_download"], data)
+            with open(filename, "wb") as f:
+                f.write(response)
+            log(f"Downloaded file {filename}", indent=2)
 
 
 def save_conversation_to_text(messages, name, output_path):
@@ -106,21 +120,23 @@ def save_conversation_to_text(messages, name, output_path):
 
 def slack_request(method, url, data, params=None, indent=1):
     global sleep_time
+    url = url if url.startswith("https://") else f"https://{data['workspace']}.slack.com/api/{url}"
     while True:
         response = requests.request(
             method,
-            f"https://{data['workspace']}.slack.com/api/{url}",
+            url,
             headers={"cookie": data["cookie"]},
-            data={"token": data["token"]},
+            data={"token": data["token"]} if method == "POST" else None,
             params=params,
         )
         response.raise_for_status()
+        time.sleep(random.uniform(0.25, 0.75))
+        if method == "GET": return response.content
         if response.json().get("error") == "ratelimited":
             log(f"Ratelimited, sleeping for {sleep_time} seconds", indent=indent)
             time.sleep(sleep_time)
             sleep_time += 7
             continue
-        time.sleep(random.uniform(0.25, 0.75))
         return response.json()
 
 
