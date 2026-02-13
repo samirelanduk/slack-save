@@ -19,6 +19,9 @@ def main():
 
 
 def parse_args():
+    """Parses the CLI arguments to produce the data config file, and the path
+    for the output directory."""
+
     parser = argparse.ArgumentParser()
     parser.add_argument("data_path", type=str)
     parser.add_argument("output_path", type=str)
@@ -29,6 +32,9 @@ def parse_args():
 
 
 def get_users(data):
+    """Gets all users in the workspace as a mapping of user ID to user data. It
+    goes through all channel and conversation overviews to get this data."""
+
     log("Downloading users")
     users = {}
     for channel_id in data["channels"] | data["conversations"]:
@@ -40,6 +46,10 @@ def get_users(data):
 
 
 def process_conversation(channel_id, channel_name, data, output, output_path):
+    """Fully processes a conversation and updates the output object in place
+    with the downloaded messages. As a side effect it will update the output on
+    disk once completed, and save a text representation of the conversation."""
+
     log(channel_name)
     messages = get_all_messages(channel_id, data, output_path)
     output["conversations"][channel_id] = {
@@ -51,6 +61,10 @@ def process_conversation(channel_id, channel_name, data, output, output_path):
 
 
 def get_all_messages(channel_id, data, output_path, reply_ts=None):
+    """Gets all messages in a thread, whether for a channel or the replies to a
+    single message. It will download all files attached to the messages, and
+    find all replies recursively."""
+
     page = 1
     last_message_ts = None
     messages = []
@@ -76,6 +90,9 @@ def get_all_messages(channel_id, data, output_path, reply_ts=None):
 
 
 def get_messages_page(channel_id, data, latest_ts=None, reply_ts=None):
+    """Gets a single page of messages for a particular channel, at a particular
+    point in time."""
+
     path = "conversations.replies" if reply_ts else "conversations.history"
     params = {"channel": channel_id}
     if latest_ts: params["latest"] = latest_ts
@@ -86,6 +103,8 @@ def get_messages_page(channel_id, data, latest_ts=None, reply_ts=None):
 
 
 def check_replies(message, channel_id, data, output_path):
+    """Downloads any replies for a message, and adds them to the message."""
+
     if message.get("reply_count", 0) > 0:
         message["replies"] = get_all_messages(channel_id, data, output_path, reply_ts=message["ts"])
     else:
@@ -93,6 +112,9 @@ def check_replies(message, channel_id, data, output_path):
 
 
 def check_files(message, data, output_path):
+    """Downloads any files attached to a message, and saves them to disk. If the
+    file has already been downloaded, it will not be downloaded again."""
+
     for file in message.get("files", []):
         if not file.get("url_private_download"): continue
         filename = f"{output_path}/slack_files/{file['id']}.{file['filetype']}"
@@ -106,6 +128,9 @@ def check_files(message, data, output_path):
 
 
 def save_conversation_to_text(messages, name, output_path):
+    """Saves a conversation to a text file. It will format the messages in a
+    human-readable way, and save the file to the output path."""
+
     lines = []
     for message in messages:
         dt = datetime.fromtimestamp(float(message["ts"]))
@@ -120,6 +145,9 @@ def save_conversation_to_text(messages, name, output_path):
     
 
 def slack_request(method, url, data, params=None, indent=1):
+    """Makes a request to the Slack API. It will handle ratelimiting,
+    authentication, and URL construction."""
+
     global sleep_time
     url = url if url.startswith("https://") else f"https://{data['workspace']}.slack.com/api/{url}"
     headers = {"cookie": data["cookie"]}
@@ -150,18 +178,26 @@ def slack_request(method, url, data, params=None, indent=1):
 
 
 def slack_post(*args, **kwargs):
+    """Makes a POST request to the Slack API."""
+
     return slack_request("POST", *args, **kwargs)
 
 
 def slack_get(*args, **kwargs):
+    """Makes a GET request to the Slack API."""
+
     return slack_request("GET", *args, **kwargs)
 
 
 def log(message, indent=0):
+    """Logs a message to the console with some indentation."""
+
     print(f"{'    ' * indent}{message}")
 
 
 def save_output(output, output_path):
+    """Saves the output object to a JSON file."""
+    
     os.makedirs(output_path, exist_ok=True)
     with open(f"{output_path}/slack.json", "w") as f:
         json.dump(output, f, indent=4)
