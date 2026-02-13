@@ -71,7 +71,7 @@ def process_conversation(channel, data, output, output_path):
         "messages": messages
     }
     save_output(output, output_path)
-    save_conversation_to_text(messages, readable_name, output_path)
+    save_conversation_to_text(messages, readable_name, output["people"], output_path)
 
 
 def channel_readable_name(channel, users):
@@ -159,17 +159,19 @@ def check_files(message, data, output_path):
             log(f"Downloaded file {filename}", indent=2)
 
 
-def save_conversation_to_text(messages, name, output_path):
+def save_conversation_to_text(messages, name, users,output_path):
     """Saves a conversation to a text file. It will format the messages in a
     human-readable way, and save the file to the output path."""
 
     lines = []
     for message in messages:
+        user_name = user_id_to_user_name(message["user"], users)
         dt = datetime.fromtimestamp(float(message["ts"]))
         dt_string = dt.strftime("%Y-%m-%d %H:%M:%S")
-        lines.append(f"{dt_string}: {message['text']}\n")
+        lines.append(f"{dt_string}: [{user_name}] {message['text']}\n")
         for reply in message.get("replies", []):
-            lines.append(f"    {reply['text']}")
+            user_name = user_id_to_user_name(reply["user"], users)
+            lines.append(f"    [{user_name}] {reply['text']}")
         lines.append("")
     filename = name.replace(" ", "_").replace(",", "_")
     with open(f"{output_path}/{filename}.txt", "w") as f:
