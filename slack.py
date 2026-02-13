@@ -11,11 +11,13 @@ sleep_time = 20
 
 def main():
     data, output_path = parse_args()
-    output = {"people": {}, "conversations": {}}
-    output["people"] = get_users(data)
+    output = {"channels": {}, "people": {}, "conversations": {}}
+    output["channels"] = get_channels(data)
     save_output(output, output_path)
-    for channel_id, channel_name in data["channels"].items():
-        process_conversation(channel_id, channel_name, data, output, output_path)
+    output["people"] = get_users(output["channels"], data)
+    save_output(output, output_path)
+    for channel in output["channels"].values():
+        process_conversation(channel, data, output, output_path)
 
 
 def parse_args():
@@ -31,13 +33,24 @@ def parse_args():
     return data, args.output_path
 
 
-def get_users(data):
+def get_channels(data):
+    """Gets all channels in the workspace as a mapping of channel ID to channel
+    data. It will return all channels, including direct messages, group messages,
+    and public and private channels."""
+
+    log("Downloading channels")
+    params = {"types": "public_channel,private_channel,im,mpim"}
+    channel_list = slack_post("conversations.list", data, params=params)["channels"]
+    return {channel["id"]: channel for channel in channel_list}
+
+
+def get_users(channels, data):
     """Gets all users in the workspace as a mapping of user ID to user data. It
     goes through all channel and conversation overviews to get this data."""
 
     log("Downloading users")
     users = {}
-    for channel_id in data["channels"] | data["conversations"]:
+    for channel_id in channels:
         params = {"channel": channel_id}
         response = slack_post("conversations.view", data, params=params)
         for user in response["users"]:
@@ -45,19 +58,38 @@ def get_users(data):
     return users
 
 
-def process_conversation(channel_id, channel_name, data, output, output_path):
+def process_conversation(channel, data, output, output_path):
     """Fully processes a conversation and updates the output object in place
     with the downloaded messages. As a side effect it will update the output on
     disk once completed, and save a text representation of the conversation."""
 
-    log(channel_name)
-    messages = get_all_messages(channel_id, data, output_path)
-    output["conversations"][channel_id] = {
-        "name": channel_name,
+    readable_name = channel_readable_name(channel, output["people"])
+    log(readable_name)
+    messages = get_all_messages(channel["id"], data, output_path)
+    output["conversations"][channel["id"]] = {
+        "name": readable_name,
         "messages": messages
     }
     save_output(output, output_path)
-    save_conversation_to_text(messages, channel_name, output_path)
+    save_conversation_to_text(messages, readable_name, output_path)
+
+
+def channel_readable_name(channel, users):
+    """Returns a readable name for a channel. This will be the channel name for
+    regular channels, otherwise the names of the members."""
+
+    if user := channel.get("user"):
+        return user_id_to_user_name(user, users)
+    elif members := channel.get("members"):
+        return ",".join([user_id_to_user_name(member, users) for member in members])
+    else:
+        return channel["name"]
+
+
+def user_id_to_user_name(id, users):
+    """Returns the name of a user given their ID."""
+
+    return users.get(id, {"name": id})["name"]
 
 
 def get_all_messages(channel_id, data, output_path, reply_ts=None):
@@ -197,7 +229,7 @@ def log(message, indent=0):
 
 def save_output(output, output_path):
     """Saves the output object to a JSON file."""
-    
+
     os.makedirs(output_path, exist_ok=True)
     with open(f"{output_path}/slack.json", "w") as f:
         json.dump(output, f, indent=4)
