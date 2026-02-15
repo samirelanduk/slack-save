@@ -9,6 +9,11 @@ from datetime import datetime
 
 sleep_time = 20
 
+opener = urllib.request.build_opener(type(
+    "NoRaise", (urllib.request.HTTPErrorProcessor,),
+    {"http_response": lambda self, req, res: res, "https_response": lambda self, req, res: res}
+))
+
 def main():
     data, output_path = parse_args()
     output = {"channels": {}, "people": {}, "conversations": {}}
@@ -198,7 +203,7 @@ def slack_request(method, url, data, params=None, indent=1):
             headers=headers,
             method=method,
         )
-        with urllib.request.urlopen(req) as response:
+        with opener.open(req) as response:
             content = response.read()
         time.sleep(random.uniform(0.25, 0.75))
         if method == "GET": return content
