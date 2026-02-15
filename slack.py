@@ -170,12 +170,12 @@ def save_conversation_to_text(messages, name, users, output_path):
 
     lines = []
     for message in messages:
-        user_name = user_id_to_user_name(message["user"], users)
+        user_name = user_id_to_user_name(message.get("user", ""), users)
         dt = datetime.fromtimestamp(float(message["ts"]))
         dt_string = dt.strftime("%Y-%m-%d %H:%M:%S")
         lines.append(f"{dt_string}: [{user_name}] {message['text']}\n")
         for reply in message.get("replies", []):
-            user_name = user_id_to_user_name(reply["user"], users)
+            user_name = user_id_to_user_name(reply.get("user", ""), users)
             lines.append(f"    [{user_name}] {reply['text']}")
         lines.append("")
     filename = name.replace(" ", "_").replace(",", "_")
