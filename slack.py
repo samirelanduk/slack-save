@@ -15,11 +15,11 @@ opener = urllib.request.build_opener(type(
 ))
 
 def main():
-    data, output_path, channel_id = parse_args()
+    data, output_path, channel_id, channel_type = parse_args()
     output = load_output(output_path)
     output["channels"] = {
         **output["channels"],
-        **get_channels(data, channel_id=channel_id)
+        **get_channels(data, channel_id=channel_id, channel_type=channel_type)
     }
     save_output(output, output_path)
     output["people"] = {
@@ -42,20 +42,23 @@ def parse_args():
     parser.add_argument("data_path", type=str)
     parser.add_argument("output_path", type=str)
     parser.add_argument("--channel", type=str, default=None, help="Only process the channel with this ID")
+    parser.add_argument("--type", type=str, default=None, choices=["public_channel", "private_channel", "im", "mpim"], help="Only fetch channels of this type")
     args = parser.parse_args()
     with open(args.data_path) as f:
         data = json.load(f)
-    return data, args.output_path, args.channel
+    return data, args.output_path, args.channel, args.type
 
 
-def get_channels(data, channel_id=None):
+def get_channels(data, channel_id=None, channel_type=None):
     """Gets all channels in the workspace as a mapping of channel ID to channel
     data. It will return all channels, including direct messages, group
     messages, and public and private channels. If channel_id is provided, only
-    that channel is returned."""
+    that channel is returned. If channel_type is provided, only channels of
+    that type are fetched."""
 
     log("Downloading channels")
-    params = {"types": "public_channel,private_channel,im,mpim"}
+    types = channel_type if channel_type else "public_channel,private_channel,im,mpim"
+    params = {"types": types}
     channel_list = slack_post("conversations.list", data, params=params)["channels"]
     if channel_id:
         channel_list = [c for c in channel_list if c["id"] == channel_id]
