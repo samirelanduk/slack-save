@@ -16,13 +16,16 @@ opener = urllib.request.build_opener(type(
 
 def main():
     data, output_path = parse_args()
-    output = {"channels": {}, "people": {}, "conversations": {}}
-    output["channels"] = get_channels(data)
-    save_output(output, output_path)
-    output["people"] = get_users(output["channels"], data)
-    save_output(output, output_path)
+    output = load_output(output_path)
+    if not output["channels"]:
+        output["channels"] = get_channels(data)
+        save_output(output, output_path)
+    if not output["people"]:
+        output["people"] = get_users(output["channels"], data)
+        save_output(output, output_path)
     for channel in output["channels"].values():
-        process_conversation(channel, data, output, output_path)
+        if channel["id"] not in output["conversations"]:
+            process_conversation(channel, data, output, output_path)
 
 
 def parse_args():
@@ -232,6 +235,16 @@ def log(message, indent=0):
     """Logs a message to the console with some indentation."""
 
     print(f"{'    ' * indent}{message}")
+
+
+def load_output(output_path):
+    """Loads existing output from disk, or returns an empty structure."""
+
+    path = f"{output_path}/slack.json"
+    if os.path.exists(path):
+        with open(path) as f:
+            return json.load(f)
+    return {"channels": {}, "people": {}, "conversations": {}}
 
 
 def save_output(output, output_path):
