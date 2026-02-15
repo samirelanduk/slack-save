@@ -15,15 +15,21 @@ opener = urllib.request.build_opener(type(
 ))
 
 def main():
-    data, output_path = parse_args()
+    data, output_path, channel_id = parse_args()
     output = load_output(output_path)
-    if not output["channels"]:
-        output["channels"] = get_channels(data)
-        save_output(output, output_path)
-    if not output["people"]:
-        output["people"] = get_users(output["channels"], data)
-        save_output(output, output_path)
+    output["channels"] = {
+        **output["channels"],
+        **get_channels(data, channel_id=channel_id)
+    }
+    save_output(output, output_path)
+    output["people"] = {
+        **output["people"],
+        **get_users(output["channels"], data)
+    }
+    save_output(output, output_path)
     for channel in output["channels"].values():
+        if channel_id and channel["id"] != channel_id:
+            continue
         if channel["id"] not in output["conversations"]:
             process_conversation(channel, data, output, output_path)
 
@@ -35,20 +41,24 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("data_path", type=str)
     parser.add_argument("output_path", type=str)
+    parser.add_argument("--channel", type=str, default=None, help="Only process the channel with this ID")
     args = parser.parse_args()
     with open(args.data_path) as f:
         data = json.load(f)
-    return data, args.output_path
+    return data, args.output_path, args.channel
 
 
-def get_channels(data):
+def get_channels(data, channel_id=None):
     """Gets all channels in the workspace as a mapping of channel ID to channel
-    data. It will return all channels, including direct messages, group messages,
-    and public and private channels."""
+    data. It will return all channels, including direct messages, group
+    messages, and public and private channels. If channel_id is provided, only
+    that channel is returned."""
 
     log("Downloading channels")
     params = {"types": "public_channel,private_channel,im,mpim"}
     channel_list = slack_post("conversations.list", data, params=params)["channels"]
+    if channel_id:
+        channel_list = [c for c in channel_list if c["id"] == channel_id]
     return {channel["id"]: channel for channel in channel_list}
 
 
