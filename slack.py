@@ -46,23 +46,52 @@ def parse_args():
     args = parser.parse_args()
     with open(args.data_path) as f:
         data = json.load(f)
-    return data, args.output_path, args.channel, args.type
+    return data, args.output_path.rstrip("/"), args.channel, args.type
 
 
 def get_channels(data, channel_id=None, channel_type=None):
     """Gets all channels in the workspace as a mapping of channel ID to channel
-    data. It will return all channels, including direct messages, group
-    messages, and public and private channels. If channel_id is provided, only
-    that channel is returned. If channel_type is provided, only channels of
-    that type are fetched."""
+    data. It will return all channels the user is a member of, including direct
+    messages, group messages, and public and private channels. Falls back to
+    client.userBoot for enterprise workspaces where conversations.list is
+    restricted. If channel_id is provided, only that channel is returned. If
+    channel_type is provided, only channels of that type are fetched."""
 
     log("Downloading channels")
     types = channel_type if channel_type else "public_channel,private_channel,im,mpim"
-    params = {"types": types}
-    channel_list = slack_post("conversations.list", data, params=params)["channels"]
+    types_set = set(types.split(","))
+    response = slack_post("users.conversations", data, params={"types": types, "limit": 200})
+    if response.get("ok") is not False:
+        channel_list = response["channels"]
+        cursor = response.get("response_metadata", {}).get("next_cursor", "")
+        while cursor:
+            response = slack_post("users.conversations", data, params={"types": types, "limit": 200, "cursor": cursor})
+            channel_list += response["channels"]
+            cursor = response.get("response_metadata", {}).get("next_cursor", "")
+    else:
+        channel_list = get_enterprise_channels(data, types_set)
     if channel_id:
         channel_list = [c for c in channel_list if c["id"] == channel_id]
     return {channel["id"]: channel for channel in channel_list}
+
+
+def get_enterprise_channels(data, types_set):
+    """Use the client.userBoot API to get all channels the user is a member of.
+    This is the only way to get all channels in an enterprise workspace."""
+
+    response = slack_post("client.userBoot", data)
+    channel_list = []
+    if types_set & {"public_channel", "private_channel", "mpim"}:
+        for ch in response.get("channels", []):
+            if ch.get("is_mpim") and "mpim" in types_set:
+                channel_list.append(ch)
+            elif ch.get("is_private") and "private_channel" in types_set:
+                channel_list.append(ch)
+            elif not ch.get("is_private") and not ch.get("is_mpim") and "public_channel" in types_set:
+                channel_list.append(ch)
+    if "im" in types_set:
+        channel_list += response.get("ims", [])
+    return channel_list
 
 
 def get_users(channels, data):
