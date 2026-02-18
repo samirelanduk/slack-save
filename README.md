@@ -14,7 +14,7 @@ python slack.py config.json output/
 python visualize.py output/slack.json
 ```
 
-> **\* Note:** The core archiver (`slack.py`) uses only the Python standard library. The visualisation script (`vis.py`) requires [matplotlib](#visualisation).
+> **\* Note:** The core archiver (`slack.py`) uses only the Python standard library. The visualisation script (`visualize.py`) requires [matplotlib](#visualisation).
 
 ---
 
@@ -135,7 +135,7 @@ pip install matplotlib
 Point it at the `slack.json` file produced by the archiver:
 
 ```bash
-python visualize.py.py output/slack.json
+python visualize.py output/slack.json
 ```
 
 #### Options
