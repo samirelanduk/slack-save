@@ -73,8 +73,6 @@ To find these values:
 4. The `token` is in the POST request body.
 5. The `cookie` is in the request headers under `Cookie`.
 
-> **Tip:** Keep your config file out of version control — `*.json` is already in this project's `.gitignore`.
-
 ---
 
 ## Archiving
