@@ -31,6 +31,22 @@ This tool accesses Slack using session cookies and tokens extracted from your br
 - Python 3.10 or later
 - A Slack workspace you are logged into in your browser
 
+### Download
+
+Clone the repository (requires [Git](https://git-scm.com/)):
+
+```bash
+git clone https://github.com/samirelanduk/slack-save.git
+cd slack-save
+```
+
+Alternatively, download the scripts directly without Git:
+
+```bash
+curl -O https://raw.githubusercontent.com/samirelanduk/slack-save/master/slack.py
+curl -O https://raw.githubusercontent.com/samirelanduk/slack-save/master/visualize.py
+```
+
 ### Configuration
 
 The archiver reads credentials from a JSON config file. Create a file (e.g. `config.json`) with the following structure:
