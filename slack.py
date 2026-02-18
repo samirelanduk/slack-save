@@ -53,7 +53,7 @@ def get_channels(data, channel_id=None, channel_type=None):
     """Gets all channels in the workspace as a mapping of channel ID to channel
     data. It will return all channels the user is a member of, including direct
     messages, group messages, and public and private channels. Falls back to
-    client.userBoot for enterprise workspaces where conversations.list is
+    client.userBoot for enterprise workspaces where users.conversations is
     restricted. If channel_id is provided, only that channel is returned. If
     channel_type is provided, only channels of that type are fetched."""
 
