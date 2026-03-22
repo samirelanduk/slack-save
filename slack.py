@@ -24,7 +24,7 @@ def main():
     save_output(output, output_path)
     output["people"] = {
         **output["people"],
-        **get_users(output["channels"], data)
+        **get_users(output["channels"], data, output_path)
     }
     save_output(output, output_path)
     for channel in output["channels"].values():
@@ -94,7 +94,7 @@ def get_enterprise_channels(data, types_set):
     return channel_list
 
 
-def get_users(channels, data):
+def get_users(channels, data, output_path):
     """Gets all users in the workspace as a mapping of user ID to user data. It
     goes through all channel and conversation overviews to get this data."""
 
@@ -105,7 +105,25 @@ def get_users(channels, data):
         response = slack_post("conversations.view", data, params=params)
         for user in response["users"]:
             users[user["id"]] = user
+    for user in users.values():
+        download_user_photo(user, data, output_path)
     return users
+
+
+def download_user_photo(user, data, output_path):
+    """Downloads a user's profile photo and saves it to slack_files/people/."""
+
+    image_url = user.get("profile", {}).get("image_72")
+    if not image_url:
+        return
+    ext = image_url.rsplit(".", 1)[-1].split("?")[0] if "." in image_url else "jpg"
+    filename = f"{output_path}/slack_files/people/{user['id']}.{ext}"
+    if os.path.exists(filename):
+        return
+    os.makedirs(f"{output_path}/slack_files/people", exist_ok=True)
+    response = slack_get(image_url, data)
+    with open(filename, "wb") as f:
+        f.write(response)
 
 
 def process_conversation(channel, data, output, output_path):
