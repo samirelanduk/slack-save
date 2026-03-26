@@ -105,6 +105,10 @@ def get_users(channels, data, output_path):
         response = slack_post("conversations.view", data, params=params)
         for user in response["users"]:
             users[user["id"]] = user
+    if "USLACKBOT" not in users:
+        response = slack_post("users.info", data, params={"user": "USLACKBOT"})
+        if response.get("ok") and "user" in response:
+            users["USLACKBOT"] = response["user"]
     for user in users.values():
         download_user_photo(user, data, output_path)
     return users
