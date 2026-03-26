@@ -182,6 +182,7 @@ def get_all_messages(channel_id, data, output_path, reply_ts=None):
         for message in new_messages:
             check_replies(message, channel_id, data, output_path)
             check_files(message, data, output_path)
+            check_reactions(message, data, output_path)
         messages += new_messages
         messages.sort(key=lambda x: x["ts"])
         page += 1
@@ -225,6 +226,23 @@ def check_files(message, data, output_path):
             with open(filename, "wb") as f:
                 f.write(response)
             log(f"Downloaded file {filename}", indent=2)
+
+
+def check_reactions(message, data, output_path):
+    """Downloads any custom emoji images from reactions on a message."""
+
+    for reaction in message.get("reactions", []):
+        url = reaction.get("url")
+        if not url:
+            continue
+        ext = url.rsplit(".", 1)[-1].split("?")[0] if "." in url else "png"
+        filename = f"{output_path}/slack_files/reactions/{reaction['name']}.{ext}"
+        if not os.path.exists(filename):
+            os.makedirs(f"{output_path}/slack_files/reactions", exist_ok=True)
+            log(f"Downloading reaction {reaction['name']}...", indent=2)
+            response = slack_get(url, data)
+            with open(filename, "wb") as f:
+                f.write(response)
 
 
 def save_conversation_to_text(messages, name, users, output_path):
