@@ -130,6 +130,30 @@ def download_user_photo(user, data, output_path):
         f.write(response)
 
 
+def get_missing_users(messages, data, known_users, output_path):
+    """Finds user IDs in messages that aren't already known, looks them up via
+    users.info, and returns a mapping of user_id to user data."""
+
+    user_ids = set()
+    for message in messages:
+        for msg in [message] + message.get("replies", []):
+            if uid := msg.get("user"):
+                user_ids.add(uid)
+            for reaction in msg.get("reactions", []):
+                user_ids.update(reaction.get("users", []))
+    user_ids -= set(known_users)
+    users = {}
+    for uid in user_ids:
+        response = slack_post("users.info", data, params={"user": uid})
+        if response.get("ok") and "user" in response:
+            users[uid] = response["user"]
+            log(f"Found user: {users[uid].get('name', uid)}", indent=1)
+            download_user_photo(users[uid], data, output_path)
+        else:
+            log(f"Could not find user: {uid}", indent=1)
+    return users
+
+
 def get_bots(messages, data, known_bots, output_path):
     """Finds bot_ids in messages that aren't already known, looks them up via
     embedded bot_profile or the bots.info API, and returns a mapping of bot_id
@@ -165,6 +189,7 @@ def process_conversation(channel, data, output, output_path):
     readable_name = channel_readable_name(channel, output["people"])
     log(readable_name)
     messages = get_all_messages(channel["id"], data, output_path)
+    output["people"].update(get_missing_users(messages, data, output["people"], output_path))
     output["bots"].update(get_bots(messages, data, output["bots"], output_path))
     output["conversations"][channel["id"]] = {
         "name": readable_name,
