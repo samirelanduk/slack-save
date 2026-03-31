@@ -117,7 +117,7 @@ def get_users(channels, data, output_path):
 def download_user_photo(user, data, output_path):
     """Downloads a user's profile photo and saves it to slack_files/people/."""
 
-    image_url = user.get("profile", {}).get("image_72")
+    image_url = user.get("profile", {}).get("image_72") or user.get("icons", {}).get("image_72")
     if not image_url:
         return
     ext = image_url.rsplit(".", 1)[-1].split("?")[0] if "." in image_url else "jpg"
@@ -130,6 +130,33 @@ def download_user_photo(user, data, output_path):
         f.write(response)
 
 
+def get_bots(messages, data, known_bots, output_path):
+    """Finds bot_ids in messages that aren't already known, looks them up via
+    embedded bot_profile or the bots.info API, and returns a mapping of bot_id
+    to bot data."""
+
+    bot_ids = {}
+    for message in messages:
+        for msg in [message] + message.get("replies", []):
+            bot_id = msg.get("bot_id")
+            if bot_id and bot_id not in known_bots and bot_id not in bot_ids:
+                bot_ids[bot_id] = msg.get("bot_profile")
+    bots = {}
+    for bot_id, bot_profile in bot_ids.items():
+        if bot_profile:
+            bots[bot_id] = bot_profile
+        else:
+            response = slack_post("bots.info", data, params={"bot": bot_id})
+            if response.get("ok") and "bot" in response:
+                bots[bot_id] = response["bot"]
+            else:
+                log(f"Could not find bot: {bot_id}", indent=1)
+                continue
+        log(f"Found bot: {bots[bot_id].get('name', bot_id)}", indent=1)
+        download_user_photo(bots[bot_id], data, output_path)
+    return bots
+
+
 def process_conversation(channel, data, output, output_path):
     """Fully processes a conversation and updates the output object in place
     with the downloaded messages. As a side effect it will update the output on
@@ -138,12 +165,13 @@ def process_conversation(channel, data, output, output_path):
     readable_name = channel_readable_name(channel, output["people"])
     log(readable_name)
     messages = get_all_messages(channel["id"], data, output_path)
+    output["bots"].update(get_bots(messages, data, output["bots"], output_path))
     output["conversations"][channel["id"]] = {
         "name": readable_name,
         "messages": messages
     }
     save_output(output, output_path)
-    save_conversation_to_text(messages, readable_name, output["people"], output_path)
+    save_conversation_to_text(messages, readable_name, output["people"], output["bots"], output_path)
 
 
 def channel_readable_name(channel, users):
@@ -162,6 +190,23 @@ def user_id_to_user_name(id, users):
     """Returns the name of a user given their ID."""
 
     return users.get(id, {"name": id})["name"]
+
+
+def sender_name(message, people, bots):
+    """Returns the display name for whoever sent a message, checking people
+    first then bots."""
+
+    if user := message.get("user"):
+        return user_id_to_user_name(user, people)
+    if bot_id := message.get("bot_id"):
+        return bots.get(bot_id, {"name": bot_id}).get("name", bot_id)
+    return ""
+
+
+def format_timestamp(message):
+    """Formats a message timestamp as a human-readable datetime string."""
+
+    return datetime.fromtimestamp(float(message["ts"])).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def get_all_messages(channel_id, data, output_path, reply_ts=None):
@@ -249,19 +294,15 @@ def check_reactions(message, data, output_path):
                 f.write(response)
 
 
-def save_conversation_to_text(messages, name, users, output_path):
+def save_conversation_to_text(messages, name, people, bots, output_path):
     """Saves a conversation to a text file. It will format the messages in a
     human-readable way, and save the file to the output path."""
 
     lines = []
     for message in messages:
-        user_name = user_id_to_user_name(message.get("user", ""), users)
-        dt = datetime.fromtimestamp(float(message["ts"]))
-        dt_string = dt.strftime("%Y-%m-%d %H:%M:%S")
-        lines.append(f"{dt_string}: [{user_name}] {message['text']}\n")
+        lines.append(f"{format_timestamp(message)}: [{sender_name(message, people, bots)}] {message['text']}\n")
         for reply in message.get("replies", []):
-            user_name = user_id_to_user_name(reply.get("user", ""), users)
-            lines.append(f"    [{user_name}] {reply['text']}")
+            lines.append(f"    [{sender_name(reply, people, bots)}] {reply['text']}")
         lines.append("")
     filename = name.replace(" ", "_").replace(",", "_")
     with open(f"{output_path}/{filename}.txt", "w") as f:
@@ -325,8 +366,10 @@ def load_output(output_path):
     path = f"{output_path}/slack.json"
     if os.path.exists(path):
         with open(path) as f:
-            return json.load(f)
-    return {"channels": {}, "people": {}, "conversations": {}}
+            output = json.load(f)
+        output.setdefault("bots", {})
+        return output
+    return {"channels": {}, "people": {}, "bots": {}, "conversations": {}}
 
 
 def save_output(output, output_path):
