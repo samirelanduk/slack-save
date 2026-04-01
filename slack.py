@@ -16,7 +16,7 @@ opener = urllib.request.build_opener(type(
 
 def main():
     data, output_path, channel_id, channel_type = parse_args()
-    output = load_output(output_path)
+    output = load_output(output_path, data)
     output["channels"] = {
         **output["channels"],
         **get_channels(data, channel_id=channel_id, channel_type=channel_type)
@@ -385,7 +385,7 @@ def log(message, indent=0):
     print(f"{'    ' * indent}{message}")
 
 
-def load_output(output_path):
+def load_output(output_path, data):
     """Loads existing output from disk, or returns an empty structure."""
 
     path = f"{output_path}/slack.json"
@@ -394,7 +394,14 @@ def load_output(output_path):
             output = json.load(f)
         output.setdefault("bots", {})
         return output
-    return {"channels": {}, "people": {}, "bots": {}, "conversations": {}}
+    return {
+        "id": data["id"],
+        "name": data["workspace"],
+        "channels": {},
+        "people": {},
+        "bots": {},
+        "conversations": {}
+    }
 
 
 def save_output(output, output_path):
