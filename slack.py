@@ -17,10 +17,12 @@ opener = urllib.request.build_opener(type(
 def main():
     data, output_path, channel_id, channel_type = parse_args()
     output = load_output(output_path, data)
-    output["channels"] = {
-        **output["channels"],
-        **get_channels(data, channel_id=channel_id, channel_type=channel_type)
-    }
+    new_channels = get_channels(data, channel_id=channel_id, channel_type=channel_type)
+    for ch_id, ch_data in new_channels.items():
+        if ch_id in output["channels"]:
+            output["channels"][ch_id].update(ch_data)
+        else:
+            output["channels"][ch_id] = ch_data
     save_output(output, output_path)
     output["people"] = {
         **output["people"],
@@ -30,7 +32,7 @@ def main():
     for channel in output["channels"].values():
         if channel_id and channel["id"] != channel_id:
             continue
-        if channel["id"] not in output["conversations"]:
+        if "messages" not in channel:
             process_conversation(channel, data, output, output_path)
 
 
@@ -191,10 +193,8 @@ def process_conversation(channel, data, output, output_path):
     messages = get_all_messages(channel["id"], data, output_path)
     output["people"].update(get_missing_users(messages, data, output["people"], output_path))
     output["bots"].update(get_bots(messages, data, output["bots"], output_path))
-    output["conversations"][channel["id"]] = {
-        "name": readable_name,
-        "messages": messages
-    }
+    channel["readable_name"] = readable_name
+    channel["messages"] = messages
     save_output(output, output_path)
     save_conversation_to_text(messages, readable_name, output["people"], output["bots"], output_path)
 
@@ -397,10 +397,9 @@ def load_output(output_path, data):
     return {
         "id": data["id"],
         "name": data["workspace"],
-        "channels": {},
         "people": {},
         "bots": {},
-        "conversations": {}
+        "channels": {},
     }
 
 
