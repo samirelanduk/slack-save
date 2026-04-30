@@ -30,8 +30,9 @@ def extract_timestamps(jdata):
     names to lists of unix timestamps."""
 
     return {
-        thread["name"]: [float(m["ts"]) for m in thread["messages"]]
-        for thread in jdata["conversations"].values()
+        channel["readable_name"]: [float(m["ts"]) for m in channel["messages"]]
+        for channel in jdata["channels"].values()
+        if "messages" in channel
     }
 
 
