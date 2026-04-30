@@ -53,6 +53,7 @@ The archiver reads credentials from a JSON config file. Create a file (e.g. `con
 
 ```json
 {
+    "id": "T0123456789",
     "workspace": "your-workspace-name",
     "token": "xoxc-...",
     "cookie": "d=xoxd-..."
@@ -61,6 +62,7 @@ The archiver reads credentials from a JSON config file. Create a file (e.g. `con
 
 | Field | Description |
 |-------|-------------|
+| `id` | The Slack workspace ID (optional) |
 | `workspace` | The subdomain of your Slack workspace (i.e. the `xxx` in `xxx.slack.com`) |
 | `token` | Your `xoxc-` session token |
 | `cookie` | Your browser's `d` cookie value for Slack |

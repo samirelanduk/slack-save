@@ -395,7 +395,7 @@ def load_output(output_path, data):
         output.setdefault("bots", {})
         return output
     return {
-        "id": data["id"],
+        "id": data.get("id", ""),
         "name": data["workspace"],
         "people": {},
         "bots": {},
